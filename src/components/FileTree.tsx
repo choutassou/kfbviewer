@@ -14,7 +14,7 @@ const FileTree: React.FC<FileTreeProps> = ({ data, onNodeSelect }) => {
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set(['root', 'header', 'images', 'tiles']));
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [showSearch, setShowSearch] = useState<boolean>(false);
-  
+
   // Format file sizes
   const formatFileSize = useCallback((bytes: number): string => {
     if (bytes === 0) return '0 B';
@@ -134,7 +134,7 @@ const FileTree: React.FC<FileTreeProps> = ({ data, onNodeSelect }) => {
     createTreeStructure().forEach(collectNodeIds);
     setExpandedNodes(allNodes);
   }, [data, formatFileSize]);
-  
+
   const collapseAll = useCallback(() => {
     setExpandedNodes(new Set(['root']));
   }, []);
@@ -142,17 +142,17 @@ const FileTree: React.FC<FileTreeProps> = ({ data, onNodeSelect }) => {
   // Search functionality
   const filteredTree = useMemo(() => {
     if (!searchQuery.trim()) return createTreeStructure();
-    
+
     const filterNodes = (nodes: TreeNode[]): TreeNode[] => {
       return nodes.reduce<TreeNode[]>((acc, node) => {
         const matchesSearch = node.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                             node.type.toLowerCase().includes(searchQuery.toLowerCase());
-        
+          node.type.toLowerCase().includes(searchQuery.toLowerCase());
+
         let filteredChildren: TreeNode[] = [];
         if (node.children) {
           filteredChildren = filterNodes(node.children);
         }
-        
+
         // Include node if it matches or has matching children
         if (matchesSearch || filteredChildren.length > 0) {
           acc.push({
@@ -160,11 +160,11 @@ const FileTree: React.FC<FileTreeProps> = ({ data, onNodeSelect }) => {
             children: filteredChildren.length > 0 ? filteredChildren : node.children
           });
         }
-        
+
         return acc;
       }, []);
     };
-    
+
     return filterNodes(createTreeStructure());
   }, [searchQuery, data, formatFileSize]);
 
@@ -182,7 +182,7 @@ const FileTree: React.FC<FileTreeProps> = ({ data, onNodeSelect }) => {
     if (node.children && node.children.length > 0) {
       toggleExpand(node.id);
     }
-    
+
     setSelectedNode(node.id);
     onNodeSelect(node);
   };
@@ -190,23 +190,23 @@ const FileTree: React.FC<FileTreeProps> = ({ data, onNodeSelect }) => {
   const getNodeIcon = (node: TreeNode) => {
     switch (node.type) {
       case 'root':
-        return <File className="h-4 w-4" />;
+        return <File className="h-3.5 w-3.5" />;
       case 'folder':
         // Use FolderOpen for expanded folders, Folder for collapsed
         const isExpanded = expandedNodes.has(node.id);
-        return isExpanded ? <FolderOpen className="h-4 w-4" /> : <Folder className="h-4 w-4" />;
+        return isExpanded ? <FolderOpen className="h-3.5 w-3.5" /> : <Folder className="h-3.5 w-3.5" />;
       case 'associated-image':
-        return <Image className="h-4 w-4" />;
+        return <Image className="h-3.5 w-3.5" />;
       case 'tile':
-        return <Image className="h-4 w-4" />; // Changed from Layers to Image
+        return <Image className="h-3.5 w-3.5" />; // Changed from Layers to Image
       case 'zoom-level':
-        return <Layers2 className="h-4 w-4" />; // Added zoom-level with Layers2
+        return <Layers2 className="h-3.5 w-3.5" />; // Added zoom-level with Layers2
       case 'error':
         return <AlertCircle className="h-4 w-4 text-destructive" />;
       case 'raw-data':
-        return <Database className="h-4 w-4" />;
+        return <Database className="h-3.5 w-3.5" />;
       default:
-        return <File className="h-4 w-4" />;
+        return <File className="h-3.5 w-3.5" />;
     }
   };
 
@@ -219,7 +219,7 @@ const FileTree: React.FC<FileTreeProps> = ({ data, onNodeSelect }) => {
       <div key={node.id} className={cn("ml-0", level > 0 && `ml-${level * 4}`)}>
         <div
           className={cn(
-            "flex items-center gap-2 px-2 py-1.5 text-sm rounded-md cursor-pointer transition-colors",
+            "flex items-center gap-2 px-2 py-1 text-xs rounded-md cursor-pointer transition-colors",
             "hover:bg-accent hover:text-accent-foreground",
             isSelected && "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground",
             node.type === 'error' && "text-destructive"
@@ -228,12 +228,12 @@ const FileTree: React.FC<FileTreeProps> = ({ data, onNodeSelect }) => {
         >
           {hasChildren ? (
             isExpanded ? (
-              <ChevronDown className="h-4 w-4 flex-shrink-0" />
+              <ChevronDown className="h-3.5 w-3.5 flex-shrink-0" />
             ) : (
-              <ChevronRight className="h-4 w-4 flex-shrink-0" />
+              <ChevronRight className="h-3.5 w-3.5 flex-shrink-0" />
             )
           ) : (
-            <div className="w-4 h-4 flex-shrink-0" />
+            <div className="w-3.5 h-3.5 flex-shrink-0" />
           )}
           {getNodeIcon(node)}
           <span className="truncate">{node.label}</span>
@@ -249,15 +249,15 @@ const FileTree: React.FC<FileTreeProps> = ({ data, onNodeSelect }) => {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header with controls */}
-      <div className="flex-shrink-0 p-3 border-b bg-muted/20">
-        <div className="flex items-center justify-between gap-2 mb-2">
+      {/* Compact header with essential controls */}
+      <div className="flex-shrink-0 px-2 py-1 bg-muted/10">
+        <div className="flex items-center justify-between gap-2 mb-1.5">
           <div className="flex items-center gap-1">
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setShowSearch(!showSearch)}
-              className="h-7 w-7 p-0"
+              className="h-6 w-6 p-0"
               title="Toggle search"
             >
               <Search className="h-3 w-3" />
@@ -266,7 +266,7 @@ const FileTree: React.FC<FileTreeProps> = ({ data, onNodeSelect }) => {
               variant="ghost"
               size="sm"
               onClick={expandAll}
-              className="h-7 w-7 p-0"
+              className="h-6 w-6 p-0"
               title="Expand all"
             >
               <Maximize2 className="h-3 w-3" />
@@ -275,25 +275,25 @@ const FileTree: React.FC<FileTreeProps> = ({ data, onNodeSelect }) => {
               variant="ghost"
               size="sm"
               onClick={collapseAll}
-              className="h-7 w-7 p-0"
+              className="h-6 w-6 p-0"
               title="Collapse all"
             >
               <Minimize2 className="h-3 w-3" />
             </Button>
           </div>
-          
+
           {data && (
-            <div className="flex items-center gap-2">
-              <span className="px-2 py-1 bg-muted rounded text-xs font-medium">
+            <div className="flex items-center gap-1.5">
+              <span className="px-1.5 py-0.5 bg-muted rounded text-xs font-medium">
                 {data.tiles.length} tiles
               </span>
-              <span className="px-2 py-1 bg-muted rounded text-xs font-medium">
+              <span className="px-1.5 py-0.5 bg-muted rounded text-xs font-medium">
                 {data.associated_images.filter(img => !img.error).length} images
               </span>
             </div>
           )}
         </div>
-        
+
         {/* Search input */}
         {showSearch && (
           <div className="relative">
@@ -302,7 +302,7 @@ const FileTree: React.FC<FileTreeProps> = ({ data, onNodeSelect }) => {
               placeholder="Search tiles, images, properties..."
               value={searchQuery}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
-              className="w-full h-8 text-sm pr-8 px-3 border border-border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              className="w-full h-7 text-xs pr-8 px-3 border border-border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
             />
             {searchQuery && (
               <Button
@@ -317,7 +317,7 @@ const FileTree: React.FC<FileTreeProps> = ({ data, onNodeSelect }) => {
           </div>
         )}
       </div>
-      
+
       {/* Tree content */}
       <div className="flex-1 overflow-y-auto p-2">
         {searchQuery && filteredTree.length === 0 ? (

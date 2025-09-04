@@ -117,57 +117,17 @@ pub async fn debug_file_header(
     Ok(parser.get_hex_dump(0, 128))
 }
 
-#[derive(serde::Serialize)]
-pub struct OpenSeaDragonConfig {
-    pub width: u32,
-    pub height: u32,
-    pub tile_size: u32,
-    pub min_level: u32,
-    pub max_level: u32,
-}
 
 #[tauri::command]
-pub async fn get_openseadragon_config(
-    file_path: String,
-    parsers: State<'_, ParserStore>,
-) -> Result<OpenSeaDragonConfig, String> {
-    let parsers_lock = parsers.lock().unwrap();
-    let parser = parsers_lock
-        .get(&file_path)
-        .ok_or("File not opened")?;
-    
-    let data = parser.parse().map_err(|e| e.to_string())?;
-    
-    // Calculate zoom levels
-    let mut levels: Vec<u32> = data.tiles.iter().map(|t| t.zoom_level as u32).collect();
-    levels.sort();
-    levels.dedup();
-    
-    let min_level = *levels.first().unwrap_or(&0);
-    let max_level = *levels.last().unwrap_or(&0);
-    
-    // Use a common tile size (most KFB tiles are 256x256)
-    let tile_size = data.tiles.first()
-        .map(|t| t.tile_width.max(t.tile_height) as u32)
-        .unwrap_or(256);
-    
-    Ok(OpenSeaDragonConfig {
-        width: data.header.base_width as u32,
-        height: data.header.base_height as u32,
-        tile_size,
-        min_level,
-        max_level,
-    })
-}
-
-#[tauri::command]
-pub async fn get_tile_for_openseadragon(
+pub async fn get_tile(
     file_path: String,
     level: u32,
     x: u32,
     y: u32,
     parsers: State<'_, ParserStore>,
 ) -> Result<String, String> {
+    eprintln!("Tile request: level={}, x={}, y={}, file={}", level, x, y, file_path);
+    
     let parsers_lock = parsers.lock().unwrap();
     let parser = parsers_lock
         .get(&file_path)
@@ -176,68 +136,46 @@ pub async fn get_tile_for_openseadragon(
     // Get the parsed data to find the appropriate tile
     let data = parser.parse().map_err(|e| e.to_string())?;
     
-    // Get the tile size for coordinate conversion (assuming square tiles)
-    let tile_size = data.tiles.first()
-        .map(|t| t.tile_width)
-        .unwrap_or(256) as u32;
+    // Debug: Print available zoom levels
+    let available_levels: Vec<i32> = data.tiles.iter().map(|t| t.zoom_level).collect();
+    let mut unique_levels = available_levels.clone();
+    unique_levels.sort();
+    unique_levels.dedup();
+    eprintln!("Available zoom levels in KFB: {:?}", unique_levels);
     
-    // Convert OpenSeaDragon tile coordinates (x, y) to KFB pixel coordinates
-    // OpenSeaDragon uses tile indices, KFB uses pixel positions
-    let pixel_x = (x * tile_size) as i32;
-    let pixel_y = (y * tile_size) as i32;
+    // For now, let's try a simpler approach: just find any tile at the requested level
+    let tiles_at_level: Vec<&crate::kfb::KfbTile> = data.tiles.iter()
+        .filter(|t| t.zoom_level as u32 == level)
+        .collect();
     
-    // Find tile by zoom level and pixel coordinates
-    let matching_tile = data.tiles.iter().find(|tile| {
-        tile.zoom_level as u32 == level &&
-        tile.pos_x == pixel_x &&
-        tile.pos_y == pixel_y
-    });
+    eprintln!("Tiles at level {}: {}", level, tiles_at_level.len());
     
-    if let Some(tile) = matching_tile {
-        parser.decode_tile_image(tile.index).map_err(|e| e.to_string())
-    } else {
-        // Log available tiles for debugging
-        let tiles_at_level: Vec<_> = data.tiles.iter()
-            .filter(|t| t.zoom_level as u32 == level)
-            .map(|t| format!("({}, {}) -> tile_{}", t.pos_x, t.pos_y, t.index))
+    if tiles_at_level.is_empty() {
+        // If no tiles at exact level, try the closest level
+        let closest_level = unique_levels.iter()
+            .min_by_key(|&&l| (l as i32 - level as i32).abs())
+            .unwrap_or(&0);
+        
+        eprintln!("No tiles at level {}, trying closest level {}", level, closest_level);
+        
+        let closest_tiles: Vec<&crate::kfb::KfbTile> = data.tiles.iter()
+            .filter(|t| t.zoom_level == *closest_level)
             .collect();
         
-        Err(format!(
-            "Tile not found at level {} pixel coordinates ({}, {}). Available tiles at this level: {}",
-            level, pixel_x, pixel_y,
-            if tiles_at_level.is_empty() { "none".to_string() } else { tiles_at_level.join(", ") }
-        ))
+        if let Some(tile) = closest_tiles.first() {
+            eprintln!("Using tile {} from level {}", tile.index, closest_level);
+            return parser.decode_tile_image(tile.index).map_err(|e| e.to_string());
+        }
+    } else {
+        // Try to find the best matching tile at this level
+        // For now, just return the first tile at this level
+        if let Some(tile) = tiles_at_level.first() {
+            eprintln!("Using tile {} at level {} (pos: {}, {})", tile.index, level, tile.pos_x, tile.pos_y);
+            return parser.decode_tile_image(tile.index).map_err(|e| e.to_string());
+        }
     }
+    
+    Err(format!("No tiles available. File has {} total tiles across levels: {:?}", 
+                data.tiles.len(), unique_levels))
 }
 
-#[tauri::command]
-pub async fn get_sample_file_path(app: tauri::AppHandle) -> Result<String, String> {
-    // Try to get the resource path first (for bundled app)
-    if let Some(resource_path) = app.path_resolver().resolve_resource("sample.kfb") {
-        if resource_path.exists() {
-            return Ok(resource_path.to_string_lossy().to_string());
-        }
-    }
-    
-    // Try multiple possible paths for the sample file
-    let possible_paths = vec![
-        "/Users/hugh/bitroc/kfb-inspector/public/sample.kfb".to_string(),
-        std::env::current_dir()
-            .map(|d| d.join("public").join("sample.kfb").to_string_lossy().to_string())
-            .unwrap_or_default(),
-        std::env::current_dir()
-            .map(|d| d.join("..").join("public").join("sample.kfb").to_string_lossy().to_string())
-            .unwrap_or_default(),
-        std::env::current_dir()
-            .map(|d| d.join("dist").join("sample.kfb").to_string_lossy().to_string())
-            .unwrap_or_default(),
-    ];
-    
-    for path in possible_paths {
-        if !path.is_empty() && std::path::Path::new(&path).exists() {
-            return Ok(path);
-        }
-    }
-    
-    Err("Sample file not found in any expected location".to_string())
-}

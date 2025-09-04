@@ -21,9 +21,7 @@ fn main() {
             decode_tile_image,
             decode_associated_image,
             debug_file_header,
-            get_sample_file_path,
-            get_openseadragon_config,
-            get_tile_for_openseadragon
+            get_tile
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

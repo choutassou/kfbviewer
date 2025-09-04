@@ -2,16 +2,16 @@ import React from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Upload, FolderOpen } from 'lucide-react';
 import { Button } from './ui/button';
+import { Icons } from './Icons';
 import { cn } from '../lib/utils';
 
 interface WelcomeScreenProps {
   onOpenFile: () => void;
-  onOpenSample: () => void;
   onFileSelect: (files: File[]) => void;
   loading?: boolean;
 }
 
-const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onOpenFile, onOpenSample, onFileSelect, loading = false }) => {
+const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onOpenFile, onFileSelect, loading = false }) => {
   const { getRootProps, isDragActive } = useDropzone({
     onDrop: onFileSelect,
     accept: {
@@ -30,11 +30,7 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onOpenFile, onOpenSample,
       <div className="text-center max-w-md mx-auto p-8">
         <div className="mb-8">
           <div className="w-24 h-24 mx-auto mb-4 flex items-center justify-center">
-            <img
-              src="/logo.png"
-              alt="KFB Inspector Logo"
-              className="w-20 h-20"
-            />
+            <Icons.logo className="w-20 h-20 text-primary" />
           </div>
           <h1 className="text-2xl font-bold text-primary mb-2">
             KFB Inspector
@@ -45,24 +41,14 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onOpenFile, onOpenSample,
         </div>
 
         <div className="space-y-4">
-          <div className="flex gap-2">
-            <Button
-              onClick={onOpenFile}
-              disabled={loading}
-              className="flex-1 flex items-center justify-center gap-2"
-            >
-              <FolderOpen className="w-4 h-4" />
-              Open KFB File
-            </Button>
-            <Button
-              onClick={onOpenSample}
-              disabled={loading}
-              variant="outline"
-              className="flex items-center justify-center gap-2 px-4"
-            >
-              Try Sample
-            </Button>
-          </div>
+          <Button
+            onClick={onOpenFile}
+            disabled={loading}
+            className="w-full flex items-center justify-center gap-2"
+          >
+            <FolderOpen className="w-4 h-4" />
+            Open KFB File
+          </Button>
 
           <div className="relative">
             <div className="absolute inset-0 flex items-center">

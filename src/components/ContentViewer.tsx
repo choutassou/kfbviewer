@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/tauri';
-import { Loader2, ExternalLink, Image as ImageIcon, ZoomIn } from 'lucide-react';
+import { Loader2, ExternalLink, Image as ImageIcon } from 'lucide-react';
 import { TreeNode, KfbData } from '../types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Table, TableBody, TableCell, TableRow } from './ui/table';
 import { Button } from './ui/button';
-import OpenSeaDragonViewer from './OpenSeaDragonViewer';
 
 interface ContentViewerProps {
   node: TreeNode | null;
@@ -16,9 +15,6 @@ interface ContentViewerProps {
 const ContentViewer: React.FC<ContentViewerProps> = ({ node, filePath, onNodeSelect }) => {
   const [hexDump, setHexDump] = useState<string>('');
   const [loading, setLoading] = useState(false);
-
-  // View mode for root node
-  const [rootViewMode, setRootViewMode] = useState<'overview' | 'viewer'>('overview');
 
   // Container width state for responsive tile sizing
   const [containerWidth, setContainerWidth] = useState<number>(600);
@@ -410,82 +406,47 @@ const ContentViewer: React.FC<ContentViewerProps> = ({ node, filePath, onNodeSel
   }
 
   const renderRoot = (data: KfbData) => (
-    <div className="h-full flex flex-col">
-      {/* Mode selector */}
-      <div className="flex-shrink-0 p-3 border-b bg-muted/20">
-        <div className="flex gap-2">
-          <Button
-            variant={rootViewMode === 'overview' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setRootViewMode('overview')}
-          >
-            Overview
-          </Button>
-          <Button
-            variant={rootViewMode === 'viewer' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setRootViewMode('viewer')}
-          >
-            <ZoomIn className="h-4 w-4 mr-2" />
-            Deep Zoom Viewer
-          </Button>
-        </div>
-      </div>
-
-      {/* Content based on mode */}
-      <div className="flex-1 overflow-y-auto">
-        {rootViewMode === 'overview' ? (
-          <div className="p-6 space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>File Summary</CardTitle>
-                <CardDescription>General information about the KFB file</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableBody>
-                    <TableRow><TableCell className="font-medium">Format</TableCell><TableCell>KFB (KFBIO)</TableCell></TableRow>
-                    <TableRow><TableCell className="font-medium">Base Dimensions</TableCell><TableCell>{data.header.base_width} × {data.header.base_height}</TableCell></TableRow>
-                    <TableRow><TableCell className="font-medium">Zoom Levels</TableCell><TableCell>{data.header.zoom_levels}</TableCell></TableRow>
-                    <TableRow><TableCell className="font-medium">Total Tiles</TableCell><TableCell>{data.header.tile_count}</TableCell></TableRow>
-                    <TableRow><TableCell className="font-medium">Tile Size</TableCell><TableCell>{data.header.tile_size} × {data.header.tile_size}</TableCell></TableRow>
-                    <TableRow><TableCell className="font-medium">Compression</TableCell><TableCell>{data.header.compression}</TableCell></TableRow>
-                    <TableRow><TableCell className="font-medium">Scan Scale</TableCell><TableCell>{data.header.scan_scale}×</TableCell></TableRow>
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Associated Images</CardTitle>
-                <CardDescription>Additional images stored in the file</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableBody>
-                    {data.associated_images.map(img => (
-                      <TableRow key={img.name}>
-                        <TableCell className="font-medium">{img.name.charAt(0).toUpperCase() + img.name.slice(1)}</TableCell>
-                        <TableCell>
-                          {img.error ? 'Error or missing' : `${img.width} × ${img.height} (${img.length} bytes)`}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </div>
-        ) : (
-          <div className="p-6">
-            <OpenSeaDragonViewer
-              filePath={filePath}
-              height="calc(100vh - 200px)"
-            />
-          </div>
-        )}
-      </div>
+    <div className="p-6 space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>File Summary</CardTitle>
+          <CardDescription>General information about the KFB file</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableBody>
+              <TableRow><TableCell className="font-medium">Format</TableCell><TableCell>KFB (KFBIO)</TableCell></TableRow>
+              <TableRow><TableCell className="font-medium">Base Dimensions</TableCell><TableCell>{data.header.base_width} × {data.header.base_height}</TableCell></TableRow>
+              <TableRow><TableCell className="font-medium">Zoom Levels</TableCell><TableCell>{data.header.zoom_levels}</TableCell></TableRow>
+              <TableRow><TableCell className="font-medium">Total Tiles</TableCell><TableCell>{data.header.tile_count}</TableCell></TableRow>
+              <TableRow><TableCell className="font-medium">Tile Size</TableCell><TableCell>{data.header.tile_size} × {data.header.tile_size}</TableCell></TableRow>
+              <TableRow><TableCell className="font-medium">Compression</TableCell><TableCell>{data.header.compression}</TableCell></TableRow>
+              <TableRow><TableCell className="font-medium">Scan Scale</TableCell><TableCell>{data.header.scan_scale}×</TableCell></TableRow>
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+      
+      <Card>
+        <CardHeader>
+          <CardTitle>Associated Images</CardTitle>
+          <CardDescription>Additional images stored in the file</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableBody>
+              {data.associated_images.map(img => (
+                <TableRow key={img.name}>
+                  <TableCell className="font-medium">{img.name.charAt(0).toUpperCase() + img.name.slice(1)}</TableCell>
+                  <TableCell>
+                    {img.error ? 'Error or missing' : `${img.width} × ${img.height} (${img.length} bytes)`}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
     </div>
   );
 
