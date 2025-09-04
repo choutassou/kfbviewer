@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import OpenSeadragon from 'openseadragon';
 import { invoke } from '@tauri-apps/api/tauri';
-import { Plus, Minus, Home, Maximize } from 'lucide-react';
+import { Plus, Minus, Home } from 'lucide-react';
 import { Button } from './ui/button';
 import { useKfbStore } from '../store/kfbStore';
 
@@ -19,11 +19,11 @@ const SlideViewer: React.FC<SlideViewerProps> = ({
   const viewerRef = useRef<HTMLDivElement>(null);
   const osdViewerRef = useRef<OpenSeadragon.Viewer | null>(null);
   const { kfbData } = useKfbStore();
-  const [zoom, setZoom] = useState<number>(0);
+  const [_zoom, setZoom] = useState<number>(0);
   const [currentLevel, setCurrentLevel] = useState<number>(0);
   const [currentKfbLevel, setCurrentKfbLevel] = useState<number | null>(null);
   const [homeZoom, setHomeZoom] = useState<number>(1);
-  const [isFullPage, setIsFullPage] = useState<boolean>(false);
+  // no full-page toggle in current UI
   const [viewerReady, setViewerReady] = useState<boolean>(false);
 
   // Compute a robust zoom ratio using viewport bounds
@@ -223,7 +223,7 @@ const SlideViewer: React.FC<SlideViewerProps> = ({
             return new (OpenSeadragon as any).Point(bounds.x, bounds.y);
           }
           // Provide a stable hash for OSD image cache
-          getTileHashKey(level: number, x: number, y: number, time?: number): string {
+          getTileHashKey(level: number, x: number, y: number, _time?: number): string {
             return `${level}/${x}_${y}`;
           }
           downloadTileStart(imageJob: any): void {
@@ -365,7 +365,7 @@ const SlideViewer: React.FC<SlideViewerProps> = ({
 
           if (viewerRef.current) {
             const children = Array.from(viewerRef.current.children);
-            children.forEach((child, i) => {
+            children.forEach((child) => {
               const element = child as HTMLElement;
 
               // Force the OpenSeadragon container to have proper height
@@ -388,7 +388,7 @@ const SlideViewer: React.FC<SlideViewerProps> = ({
           }
         });
 
-        osdViewerRef.current.addHandler('open-failed', (event: any) => { });
+        osdViewerRef.current.addHandler('open-failed', (_event: any) => { });
 
         osdViewerRef.current.addHandler('tile-loaded', (event: any) => {
           try {
