@@ -24,6 +24,23 @@ const FileTree: React.FC<FileTreeProps> = ({ data, onNodeSelect }) => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   }, []);
 
+  // Auto-select root node when data is loaded
+  React.useEffect(() => {
+    if (data && !selectedNode) {
+      setSelectedNode('root');
+      // Create the root node directly
+      const totalTileSize = data.tiles.reduce((sum, tile) => sum + tile.length, 0);
+      const totalImageSize = data.associated_images.reduce((sum, img) => sum + (img.error ? 0 : img.length), 0);
+      const rootNode: TreeNode = {
+        id: 'root',
+        label: `KFB File • ${formatFileSize(totalTileSize + totalImageSize)}`,
+        type: 'root',
+        data: data
+      };
+      onNodeSelect(rootNode);
+    }
+  }, [data, selectedNode, onNodeSelect, formatFileSize]);
+
   if (!data) {
     return (
       <div className="flex items-center justify-center h-32 text-muted-foreground">

@@ -34,6 +34,11 @@ const ContentViewer: React.FC<ContentViewerProps> = ({ node, filePath, onNodeSel
   const [tilePreviewCache, setTilePreviewCache] = useState<Map<number, string>>(new Map());
   const [loadingTilePreviews, setLoadingTilePreviews] = useState<Set<number>>(new Set());
 
+  // Root node associated images states
+  const [rootImageData, setRootImageData] = useState<Map<string, string>>(new Map());
+  const [loadingRootImages, setLoadingRootImages] = useState<Set<string>>(new Set());
+  const [rootImageErrors, setRootImageErrors] = useState<Set<string>>(new Set());
+
   useEffect(() => {
     // Clear image states when switching nodes
     setTileImage('');
@@ -42,6 +47,11 @@ const ContentViewer: React.FC<ContentViewerProps> = ({ node, filePath, onNodeSel
     setAssociatedImage('');
     setAssociatedImageError('');
     setAssociatedImageLoading(false);
+
+    // Clear root image states when switching nodes
+    setRootImageData(new Map());
+    setLoadingRootImages(new Set());
+    setRootImageErrors(new Set());
 
     if (node && filePath && needsHexDump(node)) {
       loadHexDump(node);
@@ -55,6 +65,11 @@ const ContentViewer: React.FC<ContentViewerProps> = ({ node, filePath, onNodeSel
     // Load associated image if this is an associated image node
     if (node && filePath && node.type === 'associated-image') {
       loadAssociatedImage(node);
+    }
+
+    // Auto-load all images for root node
+    if (node && filePath && node.type === 'root') {
+      loadAllRootImages(node.data);
     }
   }, [node, filePath]);
 
@@ -234,6 +249,60 @@ const ContentViewer: React.FC<ContentViewerProps> = ({ node, filePath, onNodeSel
         newSet.delete(tileIndex);
         return newSet;
       });
+    }
+  };
+
+  // Root node associated images helper functions
+  const loadRootAssociatedImagePreview = async (imageName: string) => {
+    if (!filePath || loadingRootImages.has(imageName) || rootImageData.has(imageName)) {
+      return;
+    }
+
+    setLoadingRootImages(prev => new Set(prev).add(imageName));
+    setRootImageErrors(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(imageName);
+      return newSet;
+    });
+
+    try {
+      const base64Data = await invoke<string>('decode_associated_image', {
+        filePath,
+        imageName
+      });
+      setRootImageData(prev => new Map(prev).set(imageName, base64Data));
+    } catch (error) {
+      console.error(`Failed to load ${imageName} image:`, error);
+      setRootImageErrors(prev => new Set(prev).add(imageName));
+    } finally {
+      setLoadingRootImages(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(imageName);
+        return newSet;
+      });
+    }
+  };
+
+  const loadAllRootImages = (data: KfbData) => {
+    data.associated_images.forEach(img => {
+      if (!img.error) {
+        loadRootAssociatedImagePreview(img.name);
+      }
+    });
+  };
+
+  const handleNavigateToRootImage = (data: KfbData, imageName: string) => {
+    if (onNodeSelect) {
+      const imageData = data.associated_images.find(img => img.name === imageName);
+      if (imageData) {
+        const imageNode: TreeNode = {
+          id: `image-${imageName}`,
+          label: `${imageName.charAt(0).toUpperCase() + imageName.slice(1)} ${imageData.error ? '(Error)' : `• ${imageData.width}×${imageData.height}`}`,
+          type: imageData.error ? 'error' : 'associated-image',
+          data: imageData
+        };
+        onNodeSelect(imageNode);
+      }
     }
   };
 
@@ -432,19 +501,88 @@ const ContentViewer: React.FC<ContentViewerProps> = ({ node, filePath, onNodeSel
           <CardTitle>Associated Images</CardTitle>
           <CardDescription>Additional images stored in the file</CardDescription>
         </CardHeader>
-        <CardContent>
-          <Table>
-            <TableBody>
-              {data.associated_images.map(img => (
-                <TableRow key={img.name}>
-                  <TableCell className="font-medium">{img.name.charAt(0).toUpperCase() + img.name.slice(1)}</TableCell>
-                  <TableCell>
-                    {img.error ? 'Error or missing' : `${img.width} × ${img.height} (${img.length} bytes)`}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+        <CardContent className="space-y-6">
+          {data.associated_images.map(img => {
+            const isLoading = loadingRootImages.has(img.name);
+            const hasError = rootImageErrors.has(img.name);
+            const imgData = rootImageData.get(img.name);
+
+            return (
+              <div key={img.name} className="space-y-4">
+                {/* Image header */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex-shrink-0">
+                      {img.error ? (
+                        <AlertCircle className="h-5 w-5 text-destructive" />
+                      ) : (
+                        <ImageIcon className="h-5 w-5 text-muted-foreground" />
+                      )}
+                    </div>
+                    <div>
+                      <div className="font-semibold text-lg">
+                        {img.name.charAt(0).toUpperCase() + img.name.slice(1)}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {img.error ? 'Error or missing' : `${img.width} × ${img.height} • ${Math.round(img.length / 1024)} KB`}
+                      </div>
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleNavigateToRootImage(data, img.name)}
+                    className="h-8 px-3 text-xs"
+                  >
+                    <ExternalLink className="h-3 w-3 mr-1" />
+                    View Details
+                  </Button>
+                </div>
+
+                {/* Image content */}
+                {!img.error && (
+                  <div className="border border-border rounded-lg overflow-hidden bg-muted/10">
+                    {isLoading && (
+                      <div className="flex items-center justify-center h-48">
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span>Loading {img.name} image...</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {hasError && !isLoading && (
+                      <div className="flex items-center justify-center h-32">
+                        <div className="text-center text-destructive">
+                          <p className="font-medium">Failed to load {img.name}</p>
+                          <p className="text-sm mt-1">Image may be corrupted or in unsupported format</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {!isLoading && !hasError && imgData && (
+                      <div className="p-4">
+                        <div className="bg-white rounded-md overflow-hidden">
+                          <img
+                            src={`data:image/jpeg;base64,${imgData}`}
+                            alt={`${img.name} image`}
+                            className="w-full h-auto max-h-80 object-contain mx-auto block"
+                            onError={() => setRootImageErrors(prev => new Set(prev).add(img.name))}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {img.error && (
+                  <div className="border border-destructive/30 rounded-lg p-4 bg-destructive/5">
+                    <p className="text-destructive text-sm">This image could not be loaded from the KFB file.</p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </CardContent>
       </Card>
     </div>
