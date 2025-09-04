@@ -5,6 +5,7 @@ use tauri::State;
 
 // Global state to store parsers for opened files
 type ParserStore = Mutex<HashMap<String, KfbParser>>;
+type DataStore = Mutex<HashMap<String, KfbData>>;
 
 #[tauri::command]
 pub async fn open_kfb_file(file_path: String) -> Result<bool, String> {
@@ -24,15 +25,16 @@ pub async fn open_kfb_file(file_path: String) -> Result<bool, String> {
 pub async fn parse_kfb_file(
     file_path: String,
     parsers: State<'_, ParserStore>,
+    data_cache: State<'_, DataStore>,
 ) -> Result<KfbData, String> {
-    eprintln!("parse_kfb_file command called with: {}", file_path);
+    if cfg!(debug_assertions) { eprintln!("parse_kfb_file: {}", file_path); }
     let parser = KfbParser::new(&file_path).map_err(|e| {
-        eprintln!("Failed to create KfbParser: {}", e);
+        if cfg!(debug_assertions) { eprintln!("Failed to create KfbParser: {}", e); }
         e.to_string()
     })?;
-    eprintln!("KfbParser created successfully");
+    if cfg!(debug_assertions) { eprintln!("KfbParser created successfully"); }
     let data = parser.parse().map_err(|e| {
-        eprintln!("Failed to parse KFB: {}", e);
+        if cfg!(debug_assertions) { eprintln!("Failed to parse KFB: {}", e); }
         e.to_string()
     })?;
     
@@ -41,6 +43,10 @@ pub async fn parse_kfb_file(
         .lock()
         .unwrap()
         .insert(file_path.clone(), parser);
+    data_cache
+        .lock()
+        .unwrap()
+        .insert(file_path.clone(), data.clone());
     
     Ok(data)
 }
@@ -125,57 +131,71 @@ pub async fn get_tile(
     x: u32,
     y: u32,
     parsers: State<'_, ParserStore>,
+    data_cache: State<'_, DataStore>,
 ) -> Result<String, String> {
-    eprintln!("Tile request: level={}, x={}, y={}, file={}", level, x, y, file_path);
-    
+    if cfg!(debug_assertions) { eprintln!("Tile request: level={}, x={}, y={}, file={}", level, x, y, file_path); }
+
     let parsers_lock = parsers.lock().unwrap();
     let parser = parsers_lock
         .get(&file_path)
         .ok_or("File not opened")?;
-    
-    // Get the parsed data to find the appropriate tile
-    let data = parser.parse().map_err(|e| e.to_string())?;
-    
-    // Debug: Print available zoom levels
-    let available_levels: Vec<i32> = data.tiles.iter().map(|t| t.zoom_level).collect();
-    let mut unique_levels = available_levels.clone();
-    unique_levels.sort();
-    unique_levels.dedup();
-    eprintln!("Available zoom levels in KFB: {:?}", unique_levels);
-    
-    // For now, let's try a simpler approach: just find any tile at the requested level
-    let tiles_at_level: Vec<&crate::kfb::KfbTile> = data.tiles.iter()
-        .filter(|t| t.zoom_level as u32 == level)
-        .collect();
-    
-    eprintln!("Tiles at level {}: {}", level, tiles_at_level.len());
-    
-    if tiles_at_level.is_empty() {
-        // If no tiles at exact level, try the closest level
-        let closest_level = unique_levels.iter()
-            .min_by_key(|&&l| (l as i32 - level as i32).abs())
-            .unwrap_or(&0);
-        
-        eprintln!("No tiles at level {}, trying closest level {}", level, closest_level);
-        
-        let closest_tiles: Vec<&crate::kfb::KfbTile> = data.tiles.iter()
-            .filter(|t| t.zoom_level == *closest_level)
-            .collect();
-        
-        if let Some(tile) = closest_tiles.first() {
-            eprintln!("Using tile {} from level {}", tile.index, closest_level);
-            return parser.decode_tile_image(tile.index).map_err(|e| e.to_string());
-        }
-    } else {
-        // Try to find the best matching tile at this level
-        // For now, just return the first tile at this level
-        if let Some(tile) = tiles_at_level.first() {
-            eprintln!("Using tile {} at level {} (pos: {}, {})", tile.index, level, tile.pos_x, tile.pos_y);
-            return parser.decode_tile_image(tile.index).map_err(|e| e.to_string());
-        }
-    }
-    
-    Err(format!("No tiles available. File has {} total tiles across levels: {:?}", 
-                data.tiles.len(), unique_levels))
-}
 
+    // Use cached metadata if available to avoid re-parsing/logging
+    let data = if let Some(cached) = data_cache.lock().unwrap().get(&file_path) {
+        cached.clone()
+    } else {
+        let parsed = parser.parse().map_err(|e| e.to_string())?;
+        data_cache.lock().unwrap().insert(file_path.clone(), parsed.clone());
+        parsed
+    };
+
+    // Find exact tile by KFB zoom level and top-left position
+    let lvl_i32 = level as i32;
+    let x_i32 = x as i32;
+    let y_i32 = y as i32;
+
+    // Filter down to level
+    let mut tiles_at_level = data.tiles.iter().filter(|t| t.zoom_level == lvl_i32);
+
+    // Try exact match on pos_x/pos_y
+    if let Some(tile) = tiles_at_level.clone().find(|t| t.pos_x == x_i32 && t.pos_y == y_i32) {
+        if cfg!(debug_assertions) {
+            eprintln!(
+                "get_tile exact match: index={}, level={}, pos=({}, {}) len={}",
+                tile.index, tile.zoom_level, tile.pos_x, tile.pos_y, tile.length
+            );
+        }
+        return parser.decode_tile_image(tile.index).map_err(|e| e.to_string());
+    }
+
+    // Fallback: find tile covering the requested coordinate (if caller passed a pixel inside tile)
+    if let Some(tile) = tiles_at_level.clone().find(|t| {
+        x_i32 >= t.pos_x
+            && x_i32 < t.pos_x + t.tile_width
+            && y_i32 >= t.pos_y
+            && y_i32 < t.pos_y + t.tile_height
+    }) {
+        if cfg!(debug_assertions) {
+            eprintln!(
+                "get_tile coverage match: index={}, level={}, pos=({}, {}) len={}",
+                tile.index, tile.zoom_level, tile.pos_x, tile.pos_y, tile.length
+            );
+        }
+        return parser.decode_tile_image(tile.index).map_err(|e| e.to_string());
+    }
+
+    // Diagnostics
+    let mut level_set: Vec<i32> = data.tiles.iter().map(|t| t.zoom_level).collect();
+    level_set.sort();
+    level_set.dedup();
+    if cfg!(debug_assertions) {
+        eprintln!(
+            "get_tile: no match for level {} at pos ({}, {}). Levels present: {:?}",
+            level, x, y, level_set
+        );
+    }
+
+    Err(format!(
+        "No tile found at level {} and pos ({}, {}).", level, x, y
+    ))
+}

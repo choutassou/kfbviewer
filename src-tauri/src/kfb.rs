@@ -71,7 +71,7 @@ impl KfbParser {
     }
 
     pub fn parse(&self) -> anyhow::Result<KfbData> {
-        eprintln!("Starting KFB parsing...");
+        
         let mut cursor = Cursor::new(&self.mmap[..]);
         
         // Skip to magic number at offset 4
@@ -93,7 +93,7 @@ impl KfbParser {
         let base_height = cursor.read_i32::<LittleEndian>()?;
         let base_width = cursor.read_i32::<LittleEndian>()?;
         
-        eprintln!("Parsed basic values: tile_count={}, base_height={}, base_width={}", tile_count, base_height, base_width);
+        
         
         // Calculate zoom levels
         let zoom_levels = ((base_height.max(base_width) as f64).log2().ceil() as i32) + 1;
@@ -112,8 +112,7 @@ impl KfbParser {
             || compression.starts_with("J2");
         
         if !is_supported {
-            // Still allow processing but provide warning about unknown compression
-            eprintln!("Warning: Unknown compression format '{}', attempting to continue...", compression);
+            // continue silently
         }
 
         // Skip 4 bytes
@@ -163,9 +162,9 @@ impl KfbParser {
         associated_images.push(self.parse_associated_image("preview", preview_info_offset)?);
 
         // Parse tiles
-        eprintln!("About to parse {} tiles...", tile_count);
+        
         let tiles = self.parse_tiles(tiles_info_offset, tile_count, zoom_levels)?;
-        eprintln!("Finished parsing tiles, got {} tiles", tiles.len());
+        
 
         Ok(KfbData {
             header,

@@ -9,10 +9,12 @@ mod commands;
 use commands::*;
 use std::collections::HashMap;
 use std::sync::Mutex;
+use crate::kfb::KfbData;
 
 fn main() {
     tauri::Builder::default()
         .manage(Mutex::new(HashMap::<String, kfb::KfbParser>::new()))
+        .manage(Mutex::new(HashMap::<String, KfbData>::new()))
         .invoke_handler(tauri::generate_handler![
             open_kfb_file,
             parse_kfb_file,

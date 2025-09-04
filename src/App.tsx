@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/tauri';
 import { open } from '@tauri-apps/api/dialog';
 import { appWindow } from '@tauri-apps/api/window';
-import { FileText, Loader2, ZoomIn, FolderTree } from 'lucide-react';
+import { Loader2, ZoomIn, FolderTree, Plus } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Icons } from './components/Icons';
 import { Tabs, TabsList, TabsTrigger } from './components/ui/tabs';
@@ -156,11 +156,11 @@ function App() {
               </Button>
               <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'structure' | 'viewer')}>
                 <TabsList className="h-8 bg-muted/50">
-                  <TabsTrigger value="structure" className="h-7 flex items-center gap-1.5 text-sm">
+                  <TabsTrigger value="structure" className="h-7 flex items-center gap-1.5 text-xs">
                     <FolderTree className="h-4 w-4" />
                     Inspector
                   </TabsTrigger>
-                  <TabsTrigger value="viewer" className="h-7 flex items-center gap-1.5 text-sm">
+                  <TabsTrigger value="viewer" className="h-7 flex items-center gap-1.5 text-xs">
                     <ZoomIn className="h-4 w-4" />
                     Deep Zoom
                   </TabsTrigger>
@@ -172,9 +172,9 @@ function App() {
                 disabled={loading}
                 size="sm"
                 variant={'outline'}
-                className="ml-auto flex items-center gap-1 h-7 text-sm"
+                className="ml-auto flex items-center gap-1 h-7 text-xs"
               >
-                <FileText className="h-3 w-3" />
+                <Plus className="h-4 w-4" />
                 Load File
               </Button>
             </div>

@@ -39,6 +39,14 @@ const ContentViewer: React.FC<ContentViewerProps> = ({ node, filePath, onNodeSel
   const [loadingRootImages, setLoadingRootImages] = useState<Set<string>>(new Set());
   const [rootImageErrors, setRootImageErrors] = useState<Set<string>>(new Set());
 
+  // Manual get_tile tester state
+  const [testLevel, setTestLevel] = useState<string>('0');
+  const [testPosX, setTestPosX] = useState<string>('0');
+  const [testPosY, setTestPosY] = useState<string>('0');
+  const [testTileImg, setTestTileImg] = useState<string>('');
+  const [testError, setTestError] = useState<string>('');
+  const [testingTile, setTestingTile] = useState<boolean>(false);
+
   useEffect(() => {
     // Clear image states when switching nodes
     setTileImage('');
@@ -204,6 +212,33 @@ const ContentViewer: React.FC<ContentViewerProps> = ({ node, filePath, onNodeSel
       console.error('Failed to decode tile image:', error);
     }
     setImageLoading(false);
+  };
+
+  const testGetTile = async () => {
+    if (!filePath) return;
+    setTestingTile(true);
+    setTestError('');
+    setTestTileImg('');
+    try {
+      const level = Number(testLevel);
+      const x = Number(testPosX);
+      const y = Number(testPosY);
+      if (!Number.isFinite(level) || !Number.isFinite(x) || !Number.isFinite(y)) {
+        throw new Error('Please enter numeric level, pos_x, pos_y');
+      }
+      const base64Data = await invoke<string>('get_tile', {
+        filePath,
+        level,
+        x,
+        y,
+      });
+      setTestTileImg(base64Data);
+    } catch (error: any) {
+      setTestError(String(error));
+      console.error('get_tile test failed:', error);
+    } finally {
+      setTestingTile(false);
+    }
   };
 
   const loadAssociatedImage = async (node: TreeNode) => {
@@ -476,6 +511,90 @@ const ContentViewer: React.FC<ContentViewerProps> = ({ node, filePath, onNodeSel
 
   const renderRoot = (data: KfbData) => (
     <div className="p-6 space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Tile API Tester</CardTitle>
+          <CardDescription>Call backend get_tile(level, pos_x, pos_y) directly</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
+            <div>
+              <div className="text-xs text-muted-foreground mb-1">Zoom level (KFB)</div>
+              <input
+                type="number"
+                value={testLevel}
+                onChange={(e) => setTestLevel(e.target.value)}
+                className="w-full h-8 text-xs px-2 border border-border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              />
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground mb-1">pos_x (pixels)</div>
+              <input
+                type="number"
+                value={testPosX}
+                onChange={(e) => setTestPosX(e.target.value)}
+                className="w-full h-8 text-xs px-2 border border-border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              />
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground mb-1">pos_y (pixels)</div>
+              <input
+                type="number"
+                value={testPosY}
+                onChange={(e) => setTestPosY(e.target.value)}
+                className="w-full h-8 text-xs px-2 border border-border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              />
+            </div>
+            <div className="md:col-span-2 flex gap-2">
+              <Button
+                onClick={testGetTile}
+                disabled={!filePath || testingTile}
+                className="h-8"
+                variant="outline"
+              >
+                {testingTile ? (
+                  <><Loader2 className="h-3 w-3 mr-2 animate-spin" /> Fetching...</>
+                ) : (
+                  'Fetch via get_tile'
+                )}
+              </Button>
+              <Button
+                onClick={() => {
+                  // If the current node is a tile, prefill its coords
+                  if (node && node.type === 'tile') {
+                    setTestLevel(String(node.data.zoom_level ?? 0));
+                    setTestPosX(String(node.data.pos_x ?? 0));
+                    setTestPosY(String(node.data.pos_y ?? 0));
+                  }
+                }}
+                disabled={!node || node.type !== 'tile'}
+                className="h-8"
+                variant="ghost"
+                title="Prefill from selected tile"
+              >
+                Use selection
+              </Button>
+            </div>
+          </div>
+          {testError && (
+            <div className="mt-3 text-sm text-destructive">{testError}</div>
+          )}
+          {testTileImg && (
+            <div className="mt-4 border rounded bg-white p-2">
+              <img
+                src={`data:image/jpeg;base64,${testTileImg}`}
+                alt="get_tile result"
+                className="max-h-72 object-contain mx-auto"
+              />
+            </div>
+          )}
+          {!testTileImg && !testError && (
+            <div className="mt-3 text-xs text-muted-foreground">
+              Tip: Use a tile node to prefill values, or enter coordinates where pos_x/pos_y are multiples of tile size ({data.header.tile_size}).
+            </div>
+          )}
+        </CardContent>
+      </Card>
       <Card>
         <CardHeader>
           <CardTitle>File Summary</CardTitle>
