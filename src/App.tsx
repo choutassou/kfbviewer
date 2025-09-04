@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/tauri';
 import { open } from '@tauri-apps/api/dialog';
 import { appWindow } from '@tauri-apps/api/window';
@@ -7,6 +7,7 @@ import { Button } from './components/ui/button';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from './components/ui/resizable';
 import FileTree from './components/FileTree';
 import ContentViewer from './components/ContentViewer';
+import WelcomeScreen from './components/WelcomeScreen';
 import { KfbData, TreeNode } from './types';
 
 function App() {
@@ -15,30 +16,8 @@ function App() {
   const [currentFilePath, setCurrentFilePath] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [fileName, setFileName] = useState<string>('');
 
-  // Resizer state (for potential future custom resizing)
-  const [isResizing, setIsResizing] = useState(false);
-
-  // Auto-load sample file on startup
   const [isSampleFile, setIsSampleFile] = useState(false);
-
-  useEffect(() => {
-    loadSampleFileOnStartup();
-  }, []);
-
-  const loadSampleFileOnStartup = async () => {
-    try {
-      const samplePath = await invoke<string>('get_sample_file_path');
-      setIsSampleFile(true);
-      await loadFile(samplePath);
-    } catch (err) {
-      console.log('Sample file not found or failed to load:', err);
-      setIsSampleFile(false);
-      // Set default window title
-      await appWindow.setTitle('KFB Inspector');
-    }
-  };
 
   const openFile = async () => {
     try {
@@ -62,24 +41,31 @@ function App() {
   };
 
   const loadFile = async (filePath: string) => {
+    console.log('LoadFile started for:', filePath);
     setLoading(true);
     setError(null);
 
     try {
       // Validate file
+      console.log('About to validate file...');
       await invoke<boolean>('open_kfb_file', { filePath });
+      console.log('File validation completed');
 
       // Parse file
+      console.log('About to parse file...');
       const data = await invoke<KfbData>('parse_kfb_file', { filePath });
+      console.log('File parsing completed:', data);
 
       setKfbData(data);
       setCurrentFilePath(filePath);
       const newFileName = filePath.split('/').pop() || filePath.split('\\').pop() || '';
-      setFileName(newFileName);
 
       // Update window title with file name
-      const titlePrefix = isSampleFile ? 'Sample: ' : '';
-      await appWindow.setTitle(`${titlePrefix}${newFileName} - KFB Inspector`);
+      if (isSampleFile) {
+        await appWindow.setTitle(`KFB Inspector - ${newFileName} (Sample)`);
+      } else {
+        await appWindow.setTitle(`KFB Inspector - ${newFileName}`);
+      }
 
       setSelectedNode(null);
     } catch (err) {
@@ -93,55 +79,88 @@ function App() {
     setSelectedNode(node);
   };
 
-
-  // Drag and drop
-  const handleDrop = async (e: React.DragEvent) => {
-    e.preventDefault();
-
-    const files = Array.from(e.dataTransfer.files);
-    const kfbFile = files.find(file => file.name.toLowerCase().endsWith('.kfb'));
-
-    if (kfbFile) {
-      await loadFile((kfbFile as any).path);
+  const debugHeader = async () => {
+    if (currentFilePath) {
+      try {
+        const headerHex = await invoke<string>('debug_file_header', { filePath: currentFilePath });
+        console.log('KFB File Header (first 128 bytes):');
+        console.log(headerHex);
+      } catch (err) {
+        console.error('Failed to debug header:', err);
+      }
     }
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
+  const openSampleFile = async () => {
+    try {
+      setError(null);
+      const samplePath = await invoke<string>('get_sample_file_path');
+      setIsSampleFile(true);
+      await loadFile(samplePath);
+    } catch (err) {
+      setError(`Failed to open sample file: ${err}`);
+    }
   };
 
+
+  // File selection from dropzone (drag/drop only)
+  const handleFileSelect = async (files: File[]) => {
+    const kfbFile = files.find(file => file.name.toLowerCase().endsWith('.kfb'));
+
+    if (kfbFile) {
+      // For Tauri, we need the file path, which only exists for drag/drop from filesystem
+      const filePath = (kfbFile as any).path;
+      if (filePath) {
+        setIsSampleFile(false);
+        await loadFile(filePath);
+      } else {
+        setError('File selection not supported. Please drag files from your file system or use the "Open KFB File" button.');
+      }
+    }
+  };
+
+
   return (
-    <div className="h-screen bg-background text-foreground" onDrop={handleDrop} onDragOver={handleDragOver}>
+    <div className="h-screen bg-background text-foreground">
       <main className="h-full overflow-hidden">
-        <ResizablePanelGroup direction="horizontal" className="h-full">
-          <ResizablePanel defaultSize={25} minSize={15} maxSize={40}>
-            <div className="flex h-full flex-col border-r bg-card">
-              <div className="h-9 border-b bg-muted/50 px-3 py-1 flex items-center justify-between">
-                <h3 className="text-sm font-semibold">File Structure</h3>
-                <Button onClick={openFile} disabled={loading} size="sm" className="flex items-center gap-1 h-7">
-                  <FileText className="h-3 w-3" />
-                  Open KFB
-                </Button>
+        {!kfbData ? (
+          <WelcomeScreen onOpenFile={openFile} onOpenSample={openSampleFile} onFileSelect={handleFileSelect} loading={loading} />
+        ) : (
+          <ResizablePanelGroup direction="horizontal" className="h-full">
+            <ResizablePanel defaultSize={25} minSize={15} maxSize={40}>
+              <div className="flex h-full flex-col border-r bg-card">
+                <div className="h-9 border-b bg-muted/50 px-3 py-1 flex items-center justify-between">
+                  <h3 className="text-sm font-semibold">File Structure</h3>
+                  <div className="flex gap-1">
+                    <Button onClick={openFile} disabled={loading} size="sm" className="flex items-center gap-1 h-7">
+                      <FileText className="h-3 w-3" />
+                      Open KFB
+                    </Button>
+                    <Button onClick={debugHeader} disabled={loading} size="sm" variant="outline" className="h-7 px-2">
+                      Debug
+                    </Button>
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto p-2">
+                  <FileTree data={kfbData} onNodeSelect={handleNodeSelect} />
+                </div>
               </div>
-              <div className="flex-1 overflow-y-auto p-2">
-                <FileTree data={kfbData} onNodeSelect={handleNodeSelect} />
-              </div>
-            </div>
-          </ResizablePanel>
+            </ResizablePanel>
 
-          <ResizableHandle withHandle />
+            <ResizableHandle withHandle />
 
-          <ResizablePanel defaultSize={75}>
-            <div className="flex h-full flex-col bg-background">
-              <div className="border-b bg-muted/50 px-3 py-2">
-                <h3 className="text-sm font-semibold">{selectedNode ? selectedNode.label : 'Content'}</h3>
+            <ResizablePanel defaultSize={75}>
+              <div className="flex h-full flex-col bg-background">
+                <div className="border-b bg-muted/50 px-3 py-2">
+                  <h3 className="text-sm font-semibold">{selectedNode ? selectedNode.label : 'Content'}</h3>
+                </div>
+                <div className="flex-1 overflow-y-auto">
+                  <ContentViewer node={selectedNode} filePath={currentFilePath} />
+                </div>
               </div>
-              <div className="flex-1 overflow-y-auto">
-                <ContentViewer node={selectedNode} filePath={currentFilePath} />
-              </div>
-            </div>
-          </ResizablePanel>
-        </ResizablePanelGroup>
+            </ResizablePanel>
+          </ResizablePanelGroup>
+        )}
       </main>
 
       {loading && (
