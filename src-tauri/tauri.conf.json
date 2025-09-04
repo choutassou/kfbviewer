@@ -32,6 +32,10 @@
         "removeFile": true,
         "renameFile": true,
         "exists": true
+      },
+      "window": {
+        "all": false,
+        "setTitle": true
       }
     },
     "bundle": {

@@ -146,7 +146,7 @@ const FileTree: React.FC<FileTreeProps> = ({ data, onNodeSelect }) => {
           className={cn(
             "flex items-center gap-2 px-2 py-1.5 text-sm rounded-md cursor-pointer transition-colors",
             "hover:bg-accent hover:text-accent-foreground",
-            isSelected && "bg-primary text-primary-foreground hover:bg-primary/90",
+            isSelected && "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground",
             node.type === 'error' && "text-destructive"
           )}
           onClick={() => handleNodeClick(node)}
