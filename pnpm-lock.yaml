@@ -20,6 +20,9 @@ importers:
       lucide-react:
         specifier: ^0.469.0
         version: 0.469.0(react@19.1.1)
+      openseadragon:
+        specifier: ^5.0.1
+        version: 5.0.1
       react:
         specifier: ^19.0.0
         version: 19.1.1
@@ -51,6 +54,9 @@ importers:
       '@tauri-apps/cli':
         specifier: ^1.5.0
         version: 1.6.3
+      '@types/openseadragon':
+        specifier: ^4.1.0
+        version: 4.1.0
       '@types/react':
         specifier: ^19.0.0
         version: 19.1.12
@@ -643,6 +649,9 @@ packages:
   '@types/estree@1.0.8':
     resolution: {integrity: sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w==}
 
+  '@types/openseadragon@4.1.0':
+    resolution: {integrity: sha512-GLWtnT2QY0+VfoqP8Y2U7aOUoCH6ncFnZ7QbqohFLBKkujCvk3UamlJZlvlKajm2VstlxgeC7yfB9vY6M5n9PA==}
+
   '@types/react-dom@19.1.9':
     resolution: {integrity: sha512-qXRuZaOsAdXKFyOhRBg6Lqqc0yay13vN7KrIg4L7N4aaHN68ma9OK3NE1BoDFgFOTfM7zg+3/8+2n8rLUH3OKQ==}
     peerDependencies:
@@ -867,6 +876,9 @@ packages:
   object-assign@4.1.1:
     resolution: {integrity: sha512-rJgTQnkUnH1sFw8yT6VSU3zD3sWmu6sZhIseY8VX+GRu3P6F7Fu+JNDoXfklElbLJSnc3FUQHVe4cU5hj+BcUg==}
     engines: {node: '>=0.10.0'}
+
+  openseadragon@5.0.1:
+    resolution: {integrity: sha512-a/hjouW9i3UfWxRADVYN2MyRhXMGnE7x9VVL7/4jXCcDLFyO4UM5o4RStYtqa5BfaHw/wMNAaD2WbxQF8f1pJg==}
 
   picocolors@1.1.1:
     resolution: {integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==}
@@ -1454,6 +1466,8 @@ snapshots:
 
   '@types/estree@1.0.8': {}
 
+  '@types/openseadragon@4.1.0': {}
+
   '@types/react-dom@19.1.9(@types/react@19.1.12)':
     dependencies:
       '@types/react': 19.1.12
@@ -1640,6 +1654,8 @@ snapshots:
   node-releases@2.0.19: {}
 
   object-assign@4.1.1: {}
+
+  openseadragon@5.0.1: {}
 
   picocolors@1.1.1: {}
 

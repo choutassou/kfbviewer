@@ -79,17 +79,6 @@ function App() {
     setSelectedNode(node);
   };
 
-  const debugHeader = async () => {
-    if (currentFilePath) {
-      try {
-        const headerHex = await invoke<string>('debug_file_header', { filePath: currentFilePath });
-        console.log('KFB File Header (first 128 bytes):');
-        console.log(headerHex);
-      } catch (err) {
-        console.error('Failed to debug header:', err);
-      }
-    }
-  };
 
   const openSampleFile = async () => {
     try {
@@ -136,9 +125,6 @@ function App() {
                       <FileText className="h-3 w-3" />
                       Open KFB
                     </Button>
-                    <Button onClick={debugHeader} disabled={loading} size="sm" variant="outline" className="h-7 px-2">
-                      Debug
-                    </Button>
                   </div>
                 </div>
                 <div className="flex-1 overflow-y-auto p-2">
@@ -155,7 +141,7 @@ function App() {
                   <h3 className="text-sm font-semibold">{selectedNode ? selectedNode.label : 'Content'}</h3>
                 </div>
                 <div className="flex-1 overflow-y-auto">
-                  <ContentViewer node={selectedNode} filePath={currentFilePath} />
+                  <ContentViewer node={selectedNode} filePath={currentFilePath} onNodeSelect={handleNodeSelect} />
                 </div>
               </div>
             </ResizablePanel>

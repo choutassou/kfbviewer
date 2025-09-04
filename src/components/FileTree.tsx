@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { ChevronRight, ChevronDown, Folder, FolderOpen, File, Image, Layers2, AlertCircle, Database } from 'lucide-react';
+import React, { useState, useMemo, useCallback } from 'react';
+import { ChevronRight, ChevronDown, Folder, FolderOpen, File, Image, Layers2, AlertCircle, Database, Search, Maximize2, Minimize2, X } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { KfbData, TreeNode } from '../types';
+import { Button } from './ui/button';
 
 interface FileTreeProps {
   data: KfbData | null;
@@ -11,6 +12,17 @@ interface FileTreeProps {
 const FileTree: React.FC<FileTreeProps> = ({ data, onNodeSelect }) => {
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set(['root', 'header', 'images', 'tiles']));
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [showSearch, setShowSearch] = useState<boolean>(false);
+  
+  // Format file sizes
+  const formatFileSize = useCallback((bytes: number): string => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  }, []);
 
   if (!data) {
     return (
@@ -25,28 +37,34 @@ const FileTree: React.FC<FileTreeProps> = ({ data, onNodeSelect }) => {
 
   const createTreeStructure = (): TreeNode[] => {
     const tilesByLevel: { [key: number]: any[] } = {};
+    let totalTileSize = 0;
     data.tiles.forEach(tile => {
       if (!tilesByLevel[tile.zoom_level]) {
         tilesByLevel[tile.zoom_level] = [];
       }
       tilesByLevel[tile.zoom_level].push(tile);
+      totalTileSize += tile.length;
     });
+
+    // Calculate associated images total size
+    const totalImageSize = data.associated_images.reduce((sum, img) => sum + (img.error ? 0 : img.length), 0);
+    const validImages = data.associated_images.filter(img => !img.error);
 
     return [
       {
         id: 'root',
-        label: 'KFB File',
+        label: `KFB File • ${formatFileSize(totalTileSize + totalImageSize)}`,
         type: 'root',
         data: data,
         children: [
           {
             id: 'header',
-            label: 'Header',
+            label: 'Header & Metadata',
             type: 'folder',
             children: [
               {
                 id: 'header-props',
-                label: 'Properties',
+                label: `Properties • ${data.header.base_width}×${data.header.base_height}`,
                 type: 'header-props',
                 data: data.header
               },
@@ -60,35 +78,41 @@ const FileTree: React.FC<FileTreeProps> = ({ data, onNodeSelect }) => {
           },
           {
             id: 'images',
-            label: 'Associated Images',
+            label: `Associated Images • ${validImages.length}/${data.associated_images.length} valid • ${formatFileSize(totalImageSize)}`,
             type: 'folder',
             children: data.associated_images.map(img => ({
               id: `image-${img.name}`,
-              label: `${img.name.charAt(0).toUpperCase() + img.name.slice(1)} ${img.error ? '(Error)' : `(${img.width}×${img.height})`}`,
+              label: `${img.name.charAt(0).toUpperCase() + img.name.slice(1)} ${img.error ? '(Error)' : `• ${img.width}×${img.height} • ${formatFileSize(img.length)}`}`,
               type: img.error ? 'error' : 'associated-image',
               data: img
             }))
           },
           {
             id: 'tiles',
-            label: `Tiles (${data.tiles.length})`,
+            label: `Tiles • ${data.tiles.length} total • ${Object.keys(tilesByLevel).length} levels • ${formatFileSize(totalTileSize)}`,
             type: 'folder',
-            children: Object.entries(tilesByLevel).map(([level, tiles]) => ({
-              id: `level-${level}`,
-              label: `Level ${level} (${tiles.length} tiles)`,
-              type: 'zoom-level',
-              data: { level: parseInt(level), tiles },
-              children: tiles.map((tile: any) => ({
-                id: `tile-${tile.index}`,
-                label: `Tile ${tile.index} (${tile.tile_width}×${tile.tile_height})`,
-                type: 'tile',
-                data: tile
-              }))
-            }))
+            children: Object.entries(tilesByLevel)
+              .sort(([a], [b]) => parseInt(a) - parseInt(b)) // Sort levels numerically
+              .map(([level, tiles]) => {
+                const levelSize = tiles.reduce((sum: number, tile: any) => sum + tile.length, 0);
+                const avgSize = Math.round(levelSize / tiles.length);
+                return {
+                  id: `level-${level}`,
+                  label: `Level ${level} • ${tiles.length} tiles • ${formatFileSize(levelSize)} • avg ${formatFileSize(avgSize)}`,
+                  type: 'zoom-level',
+                  data: { level: parseInt(level), tiles },
+                  children: tiles.map((tile: any) => ({
+                    id: `tile-${tile.index}`,
+                    label: `Tile ${tile.index} • ${tile.tile_width}×${tile.tile_height} • ${formatFileSize(tile.length)}`,
+                    type: 'tile',
+                    data: tile
+                  }))
+                };
+              })
           },
           {
             id: 'raw-data',
-            label: 'Raw Data',
+            label: 'Raw Data & Hex Viewer',
             type: 'raw-data',
             data: data
           }
@@ -96,6 +120,53 @@ const FileTree: React.FC<FileTreeProps> = ({ data, onNodeSelect }) => {
       }
     ];
   };
+
+  // Helper functions for tree operations (now that createTreeStructure is defined)
+  const expandAll = useCallback(() => {
+    if (!data) return;
+    const allNodes = new Set<string>();
+    const collectNodeIds = (node: TreeNode) => {
+      allNodes.add(node.id);
+      if (node.children) {
+        node.children.forEach(collectNodeIds);
+      }
+    };
+    createTreeStructure().forEach(collectNodeIds);
+    setExpandedNodes(allNodes);
+  }, [data, formatFileSize]);
+  
+  const collapseAll = useCallback(() => {
+    setExpandedNodes(new Set(['root']));
+  }, []);
+
+  // Search functionality
+  const filteredTree = useMemo(() => {
+    if (!searchQuery.trim()) return createTreeStructure();
+    
+    const filterNodes = (nodes: TreeNode[]): TreeNode[] => {
+      return nodes.reduce<TreeNode[]>((acc, node) => {
+        const matchesSearch = node.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                             node.type.toLowerCase().includes(searchQuery.toLowerCase());
+        
+        let filteredChildren: TreeNode[] = [];
+        if (node.children) {
+          filteredChildren = filterNodes(node.children);
+        }
+        
+        // Include node if it matches or has matching children
+        if (matchesSearch || filteredChildren.length > 0) {
+          acc.push({
+            ...node,
+            children: filteredChildren.length > 0 ? filteredChildren : node.children
+          });
+        }
+        
+        return acc;
+      }, []);
+    };
+    
+    return filterNodes(createTreeStructure());
+  }, [searchQuery, data, formatFileSize]);
 
   const toggleExpand = (nodeId: string) => {
     const newExpanded = new Set(expandedNodes);
@@ -176,11 +247,93 @@ const FileTree: React.FC<FileTreeProps> = ({ data, onNodeSelect }) => {
     );
   };
 
-  const treeNodes = createTreeStructure();
-
   return (
-    <div className="space-y-1">
-      {treeNodes.map(node => renderNode(node))}
+    <div className="flex flex-col h-full">
+      {/* Header with controls */}
+      <div className="flex-shrink-0 p-3 border-b bg-muted/20">
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowSearch(!showSearch)}
+              className="h-7 w-7 p-0"
+              title="Toggle search"
+            >
+              <Search className="h-3 w-3" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={expandAll}
+              className="h-7 w-7 p-0"
+              title="Expand all"
+            >
+              <Maximize2 className="h-3 w-3" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={collapseAll}
+              className="h-7 w-7 p-0"
+              title="Collapse all"
+            >
+              <Minimize2 className="h-3 w-3" />
+            </Button>
+          </div>
+          
+          {data && (
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-1 bg-muted rounded text-xs font-medium">
+                {data.tiles.length} tiles
+              </span>
+              <span className="px-2 py-1 bg-muted rounded text-xs font-medium">
+                {data.associated_images.filter(img => !img.error).length} images
+              </span>
+            </div>
+          )}
+        </div>
+        
+        {/* Search input */}
+        {showSearch && (
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search tiles, images, properties..."
+              value={searchQuery}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
+              className="w-full h-8 text-sm pr-8 px-3 border border-border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            />
+            {searchQuery && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 p-0"
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+      
+      {/* Tree content */}
+      <div className="flex-1 overflow-y-auto p-2">
+        {searchQuery && filteredTree.length === 0 ? (
+          <div className="flex items-center justify-center h-32 text-muted-foreground">
+            <div className="text-center">
+              <Search className="h-8 w-8 mx-auto mb-2 opacity-50" />
+              <p className="text-sm">No results found</p>
+              <p className="text-xs">Try a different search term</p>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-1">
+            {(searchQuery ? filteredTree : filteredTree).map(node => renderNode(node))}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
