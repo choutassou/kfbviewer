@@ -19,6 +19,8 @@ fn main() {
             read_file_chunk,
             get_hex_dump,
             decode_tile_image,
+            decode_associated_image,
+            debug_file_header,
             get_sample_file_path
         ])
         .run(tauri::generate_context!())

@@ -71,6 +71,7 @@ impl KfbParser {
     }
 
     pub fn parse(&self) -> anyhow::Result<KfbData> {
+        eprintln!("Starting KFB parsing...");
         let mut cursor = Cursor::new(&self.mmap[..]);
         
         // Skip to magic number at offset 4
@@ -85,19 +86,21 @@ impl KfbParser {
             return Err(anyhow::anyhow!("Invalid KFB magic number: {}", magic));
         }
 
-        // Skip to offset 12
-        cursor.seek(SeekFrom::Start(12))?;
+        // Skip to offset 16 (where the actual integer data starts)
+        cursor.seek(SeekFrom::Start(16))?;
         
         let tile_count = cursor.read_i32::<LittleEndian>()?;
         let base_height = cursor.read_i32::<LittleEndian>()?;
         let base_width = cursor.read_i32::<LittleEndian>()?;
+        
+        eprintln!("Parsed basic values: tile_count={}, base_height={}, base_width={}", tile_count, base_height, base_width);
         
         // Calculate zoom levels
         let zoom_levels = ((base_height.max(base_width) as f64).log2().ceil() as i32) + 1;
         
         let scan_scale = cursor.read_i32::<LittleEndian>()?;
         
-        // Read compression type (4 bytes)
+        // Read compression type (4 bytes) - should be at offset 28 now
         let mut compression_bytes = [0u8; 4];
         cursor.read_exact(&mut compression_bytes)?;
         let compression = String::from_utf8_lossy(&compression_bytes).to_string();
@@ -124,7 +127,7 @@ impl KfbParser {
         let preview_info_offset = cursor.read_u64::<LittleEndian>()?;
         let tiles_info_offset = cursor.read_u64::<LittleEndian>()?;
         
-        // Read image capture resolution
+        // Read image capture resolution (should be around offset 0x4C based on hex dump)
         let image_cap_res = cursor.read_f32::<LittleEndian>()?;
         
         // Skip 8 bytes
@@ -160,7 +163,9 @@ impl KfbParser {
         associated_images.push(self.parse_associated_image("preview", preview_info_offset)?);
 
         // Parse tiles
+        eprintln!("About to parse {} tiles...", tile_count);
         let tiles = self.parse_tiles(tiles_info_offset, tile_count, zoom_levels)?;
+        eprintln!("Finished parsing tiles, got {} tiles", tiles.len());
 
         Ok(KfbData {
             header,
@@ -247,7 +252,9 @@ impl KfbParser {
             
             let length = cursor.read_i32::<LittleEndian>()?;
             let offset_from_file = cursor.read_i64::<LittleEndian>()?;
-            let tile_data_offset = offset + offset_from_file as u64;
+            // Match OpenSlide implementation: offset = seek_location + offset_from_file
+            // Negative offsets are normal and valid in KFB format
+            let tile_data_offset = (offset as i64 + offset_from_file) as u64;
             
             // Skip remaining 20 bytes
             cursor.seek(SeekFrom::Current(20))?;
@@ -335,6 +342,29 @@ impl KfbParser {
         // Convert raw tile data to base64 for frontend display
         // The frontend can decode this as JPEG/JP2K depending on the compression format
         let base64_data = base64_encode(&tile_data);
+        
+        Ok(base64_data)
+    }
+
+    pub fn decode_associated_image(&self, image_name: &str) -> anyhow::Result<String> {
+        // Find the associated image by name
+        let data = self.parse()?;
+        let image = data.associated_images.iter()
+            .find(|img| img.name == image_name)
+            .ok_or_else(|| anyhow::anyhow!("Associated image '{}' not found", image_name))?;
+
+        // Check for errors
+        if image.error.is_some() {
+            return Err(anyhow::anyhow!("Associated image '{}' has error: {}", 
+                image_name, image.error.as_ref().unwrap()));
+        }
+
+        // Read the image data from the file
+        let image_data = self.read_chunk(image.data_offset as usize, image.length as usize);
+        
+        // Convert raw image data to base64 for frontend display
+        // Associated images are typically JPEG format
+        let base64_data = base64_encode(&image_data);
         
         Ok(base64_data)
     }

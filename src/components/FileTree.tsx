@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronRight, ChevronDown, Folder, File, Image, Layers, AlertCircle, Database } from 'lucide-react';
+import { ChevronRight, ChevronDown, Folder, FolderOpen, File, Image, Layers2, AlertCircle, Database } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { KfbData, TreeNode } from '../types';
 
@@ -121,11 +121,15 @@ const FileTree: React.FC<FileTreeProps> = ({ data, onNodeSelect }) => {
       case 'root':
         return <File className="h-4 w-4" />;
       case 'folder':
-        return <Folder className="h-4 w-4" />;
+        // Use FolderOpen for expanded folders, Folder for collapsed
+        const isExpanded = expandedNodes.has(node.id);
+        return isExpanded ? <FolderOpen className="h-4 w-4" /> : <Folder className="h-4 w-4" />;
       case 'associated-image':
         return <Image className="h-4 w-4" />;
       case 'tile':
-        return <Layers className="h-4 w-4" />;
+        return <Image className="h-4 w-4" />; // Changed from Layers to Image
+      case 'zoom-level':
+        return <Layers2 className="h-4 w-4" />; // Added zoom-level with Layers2
       case 'error':
         return <AlertCircle className="h-4 w-4 text-destructive" />;
       case 'raw-data':

@@ -13,15 +13,100 @@ interface ContentViewerProps {
 const ContentViewer: React.FC<ContentViewerProps> = ({ node, filePath }) => {
   const [hexDump, setHexDump] = useState<string>('');
   const [loading, setLoading] = useState(false);
+  
+  // Tile image states
+  const [tileImage, setTileImage] = useState<string>('');
+  const [imageLoading, setImageLoading] = useState(false);
+  const [imageError, setImageError] = useState<string>('');
+  
+  // Associated image states
+  const [associatedImage, setAssociatedImage] = useState<string>('');
+  const [associatedImageLoading, setAssociatedImageLoading] = useState(false);
+  const [associatedImageError, setAssociatedImageError] = useState<string>('');
 
   useEffect(() => {
+    // Clear image states when switching nodes
+    setTileImage('');
+    setImageError('');
+    setImageLoading(false);
+    setAssociatedImage('');
+    setAssociatedImageError('');
+    setAssociatedImageLoading(false);
+    
     if (node && filePath && needsHexDump(node)) {
       loadHexDump(node);
+    }
+    
+    // Load tile image if this is a tile node
+    if (node && filePath && node.type === 'tile') {
+      loadTileImage(node);
+    }
+    
+    // Load associated image if this is an associated image node
+    if (node && filePath && node.type === 'associated-image') {
+      loadAssociatedImage(node);
     }
   }, [node, filePath]);
 
   const needsHexDump = (node: TreeNode): boolean => {
     return ['associated-image', 'tile', 'raw-data'].includes(node.type);
+  };
+
+  const formatScanTime = (scanTime: number): string => {
+    try {
+      // Convert from potential Unix timestamp (seconds or milliseconds)
+      let timestamp = scanTime;
+      
+      // If the number is very large, it might be in milliseconds
+      // If it's smaller, it might be in seconds
+      // Unix timestamps around 2020-2025 range from ~1.6B to ~1.7B seconds
+      if (timestamp > 1e12) {
+        // Likely milliseconds, convert to seconds
+        timestamp = timestamp / 1000;
+      }
+      
+      const date = new Date(timestamp * 1000);
+      
+      // Check if the date is valid and reasonable (between 1970 and 2100)
+      if (isNaN(date.getTime()) || date.getFullYear() < 1970 || date.getFullYear() > 2100) {
+        return 'Invalid timestamp';
+      }
+      
+      return date.toLocaleString();
+    } catch (error) {
+      return 'Invalid timestamp';
+    }
+  };
+
+  const formatSpendTime = (spendTime: number): string => {
+    if (spendTime < 0) {
+      return 'Invalid';
+    }
+    
+    // Based on evidence: spend_time is in milliseconds (e.g., 9000 = 9 seconds)
+    const totalSeconds = spendTime / 1000;
+    
+    // Convert to hours, minutes, seconds
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = Math.floor(totalSeconds % 60);
+    const milliseconds = spendTime % 1000;
+    
+    let result = '';
+    if (hours > 0) {
+      result = `${hours}h ${minutes}m ${seconds}s`;
+    } else if (minutes > 0) {
+      result = `${minutes}m ${seconds}s`;
+    } else if (seconds > 0) {
+      result = `${seconds}s`;
+      if (milliseconds > 0) {
+        result += ` ${milliseconds}ms`;
+      }
+    } else {
+      result = `${spendTime}ms`;
+    }
+    
+    return result;
   };
 
   const loadHexDump = async (node: TreeNode) => {
@@ -49,6 +134,46 @@ const ContentViewer: React.FC<ContentViewerProps> = ({ node, filePath }) => {
       setHexDump('Error loading hex dump');
     }
     setLoading(false);
+  };
+
+  const loadTileImage = async (node: TreeNode) => {
+    if (!filePath || node.type !== 'tile') return;
+    
+    setImageLoading(true);
+    setImageError('');
+    setTileImage('');
+    
+    try {
+      const base64Data = await invoke<string>('decode_tile_image', {
+        filePath,
+        tileIndex: node.data.index
+      });
+      setTileImage(base64Data);
+    } catch (error) {
+      setImageError(`Failed to decode tile image: ${error}`);
+      console.error('Failed to decode tile image:', error);
+    }
+    setImageLoading(false);
+  };
+
+  const loadAssociatedImage = async (node: TreeNode) => {
+    if (!filePath || node.type !== 'associated-image') return;
+    
+    setAssociatedImageLoading(true);
+    setAssociatedImageError('');
+    setAssociatedImage('');
+    
+    try {
+      const base64Data = await invoke<string>('decode_associated_image', {
+        filePath,
+        imageName: node.data.name
+      });
+      setAssociatedImage(base64Data);
+    } catch (error) {
+      setAssociatedImageError(`Failed to decode associated image: ${error}`);
+      console.error('Failed to decode associated image:', error);
+    }
+    setAssociatedImageLoading(false);
   };
 
   if (!node) {
@@ -123,8 +248,8 @@ const ContentViewer: React.FC<ContentViewerProps> = ({ node, filePath }) => {
               <TableRow><TableCell className="font-medium">Compression</TableCell><TableCell>{data.compression}</TableCell></TableRow>
               <TableRow><TableCell className="font-medium">Scan Scale</TableCell><TableCell>{data.scan_scale}×</TableCell></TableRow>
               <TableRow><TableCell className="font-medium">Image Capture Resolution</TableCell><TableCell>{data.image_cap_res}</TableCell></TableRow>
-              <TableRow><TableCell className="font-medium">Spend Time</TableCell><TableCell>{data.spend_time}</TableCell></TableRow>
-              <TableRow><TableCell className="font-medium">Scan Time</TableCell><TableCell>{data.scan_time}</TableCell></TableRow>
+              <TableRow><TableCell className="font-medium">Spend Time</TableCell><TableCell>{data.spend_time}ms ({formatSpendTime(data.spend_time)})</TableCell></TableRow>
+              <TableRow><TableCell className="font-medium">Scan Time</TableCell><TableCell>{data.scan_time} ({formatScanTime(data.scan_time)})</TableCell></TableRow>
             </TableBody>
           </Table>
         </CardContent>
@@ -173,6 +298,58 @@ const ContentViewer: React.FC<ContentViewerProps> = ({ node, filePath }) => {
         </CardContent>
       </Card>
       
+      {/* Associated Image Display */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Image Preview</CardTitle>
+          <CardDescription>Visual representation of the {data.name} image</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {associatedImageLoading && (
+            <div className="flex items-center justify-center h-64 border-2 border-dashed border-muted-foreground/25 rounded-md">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Loading image...</span>
+              </div>
+            </div>
+          )}
+          
+          {associatedImageError && (
+            <div className="flex items-center justify-center h-64 border-2 border-dashed border-destructive/25 rounded-md">
+              <div className="text-center text-destructive">
+                <p className="font-medium">Failed to load image</p>
+                <p className="text-sm mt-1">{associatedImageError}</p>
+              </div>
+            </div>
+          )}
+          
+          {!associatedImageLoading && !associatedImageError && associatedImage && (
+            <div className="space-y-4">
+              <div className="border rounded-md overflow-hidden">
+                <img 
+                  src={`data:image/jpeg;base64,${associatedImage}`}
+                  alt={`${data.name} image`}
+                  className="max-w-full h-auto"
+                  onError={() => setAssociatedImageError('Invalid image format or corrupted data')}
+                />
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Showing {data.name} image ({data.width} × {data.height} pixels)
+              </div>
+            </div>
+          )}
+          
+          {!associatedImageLoading && !associatedImageError && !associatedImage && data.error && (
+            <div className="flex items-center justify-center h-32 border-2 border-dashed border-muted-foreground/25 rounded-md">
+              <div className="text-center text-muted-foreground">
+                <p>Image not available</p>
+                <p className="text-sm mt-1">{data.error}</p>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      
       {!loading && hexDump && (
         <Card>
           <CardHeader>
@@ -194,35 +371,7 @@ const ContentViewer: React.FC<ContentViewerProps> = ({ node, filePath }) => {
     </div>
   );
 
-  const renderTile = (data: any) => {
-    const [tileImage, setTileImage] = useState<string>('');
-    const [imageLoading, setImageLoading] = useState(false);
-    const [imageError, setImageError] = useState<string>('');
-
-    const loadTileImage = async () => {
-      if (!filePath) return;
-      
-      setImageLoading(true);
-      setImageError('');
-      try {
-        const base64Data = await invoke<string>('decode_tile_image', {
-          filePath,
-          tileIndex: data.index
-        });
-        setTileImage(base64Data);
-      } catch (error) {
-        setImageError(`Failed to decode tile image: ${error}`);
-        console.error('Failed to decode tile image:', error);
-      }
-      setImageLoading(false);
-    };
-
-    // Load tile image when component mounts
-    useEffect(() => {
-      loadTileImage();
-    }, [data.index, filePath]);
-
-    return (
+  const renderTile = (data: any) => (
       <div className="p-6 space-y-6">
         <Card>
           <CardHeader>
@@ -307,7 +456,6 @@ const ContentViewer: React.FC<ContentViewerProps> = ({ node, filePath }) => {
         )}
       </div>
     );
-  };
 
   const renderZoomLevel = (data: any) => {
     const totalSize = data.tiles.reduce((sum: number, tile: any) => sum + tile.length, 0);
