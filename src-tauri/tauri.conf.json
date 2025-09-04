@@ -62,7 +62,9 @@
         "providerShortName": null,
         "signingIdentity": null
       },
-      "resources": ["../public/sample.kfb"],
+      "resources": [
+        "../public/sample.kfb"
+      ],
       "shortDescription": "",
       "targets": "all",
       "windows": {
@@ -75,7 +77,12 @@
       "csp": null
     },
     "updater": {
-      "active": false
+      "active": true,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEIyNTI3MkJBQzU5MTVDMjYKUldRbVhKSEZ1bkpTc2pveXpTOFN6T1M4dUk2bjRuSTBxOGFlbXk4ZkhSRDJQd3diQ2lIVVl3ekIK",
+      "dialog": true,
+      "endpoints": [
+        "https://github.com/bitroc-ai/kfb-inspector/releases/latest/download/latest.json"
+      ]
     },
     "windows": [
       {
