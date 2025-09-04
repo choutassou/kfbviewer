@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/tauri';
-import { Loader2, ExternalLink, Image as ImageIcon } from 'lucide-react';
+import { Loader2, ExternalLink, Image as ImageIcon, FileText, Layers2, AlertCircle } from 'lucide-react';
 import { TreeNode, KfbData } from '../types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Table, TableBody, TableCell, TableRow } from './ui/table';
@@ -897,6 +897,104 @@ const ContentViewer: React.FC<ContentViewerProps> = ({ node, filePath, onNodeSel
     </div>
   );
 
+  const renderFolder = (node: TreeNode) => {
+    if (!node.children || node.children.length === 0) {
+      return (
+        <div className="p-6 flex items-center justify-center h-full">
+          <div className="text-muted-foreground">This folder is empty</div>
+        </div>
+      );
+    }
+
+    const formatFileSize = (bytes: number): string => {
+      if (bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    };
+
+    const getNodeTypeIcon = (nodeType: string) => {
+      switch (nodeType) {
+        case 'header-props':
+          return <FileText className="h-4 w-4" />;
+        case 'offsets':
+          return <FileText className="h-4 w-4" />;
+        case 'associated-image':
+          return <ImageIcon className="h-4 w-4" />;
+        case 'tile':
+          return <ImageIcon className="h-4 w-4" />;
+        case 'zoom-level':
+          return <Layers2 className="h-4 w-4" />;
+        case 'error':
+          return <AlertCircle className="h-4 w-4 text-destructive" />;
+        default:
+          return <FileText className="h-4 w-4" />;
+      }
+    };
+
+    const getNodeStats = (child: TreeNode) => {
+      switch (child.type) {
+        case 'associated-image':
+          if (child.data?.error) {
+            return 'Error or missing';
+          }
+          return `${child.data?.width}×${child.data?.height} • ${formatFileSize(child.data?.length || 0)}`;
+        case 'tile':
+          return `${child.data?.tile_width}×${child.data?.tile_height} • ${formatFileSize(child.data?.length || 0)}`;
+        case 'zoom-level':
+          const tileCount = child.data?.tiles?.length || 0;
+          const totalSize = child.data?.tiles?.reduce((sum: number, tile: any) => sum + tile.length, 0) || 0;
+          return `${tileCount} tiles • ${formatFileSize(totalSize)}`;
+        default:
+          return '';
+      }
+    };
+
+    return (
+      <div className="p-6 space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>{node.label.split(' •')[0]}</CardTitle>
+            <CardDescription>
+              {node.id === 'header' && 'File header information and metadata'}
+              {node.id === 'images' && 'Associated images stored in the KFB file'}
+              {node.id === 'tiles' && 'Tile pyramid data organized by zoom levels'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {node.children.map((child) => (
+                <div
+                  key={child.id}
+                  className="flex items-center gap-3 p-3 border border-border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer group"
+                  onClick={() => onNodeSelect && onNodeSelect(child)}
+                >
+                  <div className="flex-shrink-0">
+                    {getNodeTypeIcon(child.type)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-sm truncate">
+                      {child.label.split(' •')[0]}
+                    </div>
+                    {getNodeStats(child) && (
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {getNodeStats(child)}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <ExternalLink className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  };
+
   switch (node.type) {
     case 'root':
       return renderRoot(node.data);
@@ -912,6 +1010,8 @@ const ContentViewer: React.FC<ContentViewerProps> = ({ node, filePath, onNodeSel
       return renderZoomLevel(node.data);
     case 'raw-data':
       return renderRawData(node.data);
+    case 'folder':
+      return renderFolder(node);
     case 'error':
       return renderError(node.data);
     default:
