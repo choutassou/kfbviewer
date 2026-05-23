@@ -57,3 +57,8 @@ src-tauri/target/
 # Temporary files
 *.tmp
 *.temp
+
+temp
+.omc
+resume-cc.sh
+
